@@ -6,4 +6,5 @@
   :dependencies [[org.clojure/clojure "1.10.0"]]
   :main ^:skip-aot adserver.core
   :target-path "target/%s"
-  :profiles {:uberjar {:aot :all}})
+  :profiles {:uberjar {:aot :all}
+             :dev     {:dependencies [[org.clojure/test.check "0.9.0"]]}})
