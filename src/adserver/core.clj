@@ -1,10 +1,10 @@
 (ns adserver.core
   (:gen-class)
-  (:require [clojure.tools.logging   :as log]
-            [mount.core              :as mount :refer [defstate]]
-            [org.httpkit.server      :as httpkit]
-            [adserver.ad-handler     :as ad-handler]
-            [compojure.api.sweet     :as api :refer [api context]]))
+  (:require [clojure.tools.logging :as log]
+            [mount.core            :as mount :refer [defstate]]
+            [org.httpkit.server    :as httpkit]
+            [adserver.ad-handler   :as ad-handler]
+            [compojure.api.sweet   :as api :refer [api context]]))
 
 
 (def handler

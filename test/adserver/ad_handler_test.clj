@@ -13,32 +13,39 @@
             gen))
 
 (defn parse-body [body]
-  (cheshire/parse-string (slurp body) true))
+  (if body
+    (cheshire/parse-string (slurp body) true)))
 
 
 (t/deftest any-ad-for-channel-is-returned-aka-fallback-roundtrip
   ;; given:
   (let [handler       adserver/handler
 
-        example-ad    (gen/generate (shadow-generator (s/gen ::ad/request)
-                                                   {:channel "foo"}))
-
+        example-ad    (-> (gen/generate (shadow-generator (s/gen ::ad/ad)
+                                                          {:channel "foo"}))
+                          (dissoc :ad-id))
         ;; when:
         post-response (handler (-> (mock/request :post "/api/v1/ad" example-ad)
                                    (mock/json-body example-ad)))
-
+        post-body     (-> post-response
+                          :body
+                          parse-body)
+        ad-location   (get-in post-response [:headers "Location"])
         ;; then:
         _             (t/testing "Sanity check when posting an ad"
-                        (t/is (= (:status post-response) 201)))
+                        (t/is (nil? post-body))
+                        (t/is (= 201 (:status post-response)))
+                        (t/is (some? ad-location)))
 
         ;; when:
         ;; NOTE: Consider GET vs POST here on large number of params? Will stick with GET for now as it
         ;;       is idempotent, and natural as we're GETting an ad.
-        result     (handler (mock/request :get "/api/v1/ad" {:channel "foo"}))]
+        get-response  (handler (mock/request :get (str "/api/v1" ad-location)))]
 
     ;; then
-  (t/testing "Ad server matches correct ads"
-    (t/is (= example-ad result)))))
+    (t/testing "Ad server matches correct ads"
+      (t/is (= 200 (:status get-response)))
+      (t/is (= example-ad (parse-body (:body get-response)))))))
 
 
 

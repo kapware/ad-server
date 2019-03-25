@@ -36,6 +36,9 @@
 (s/def ::request (s/keys :req-un [::channel ::locale ::country ::device ::interests]
                          :opt-un [::ad-ids]))
 
+(s/def ::ad      (s/keys :req-un [::channel ::locale ::country]
+                         :opt-un [::ad-id]))
+
 (s/def ::ad-content-url (with-example string?))
 
 (s/def ::ad-creative (s/keys :req-un [::ad-id
