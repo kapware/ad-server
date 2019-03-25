@@ -1,5 +1,5 @@
 (ns adserver.ad-request-test
-  (:require [adserver.ad-request    :as ad-request]
+  (:require [adserver.ad            :as ad]
             [clojure.test           :as t]
             [clojure.spec.alpha     :as s]
             [clojure.spec.gen.alpha :as gen]))
@@ -14,4 +14,17 @@
                             :device    ""
                             :interests ["IAB3-9", "IAB4-1"]}]
       ;; when/then:
-      (t/is (s/valid? ::ad-request/ad-request valid-ad-request)))))
+      (t/is (s/valid? ::ad/request valid-ad-request)))))
+
+
+(t/deftest ad-response-examples
+  (t/testing "Should conform to basic examples"
+    ;; given:
+    (let [valid-ad-response [{:ad-id    "1"
+                              :ad-content-url "s3://ads-bucket/ad-1"}
+                             {:ad-id    "2"
+                              :ad-content-url "s3://ads-bucket/ad-2"}
+                             {:ad-id    "3"
+                              :ad-content-url "s3://ads-bucket/ad-3"}]]
+      ;; when/then:
+      (t/is (s/valid? ::ad/response valid-ad-response)))))

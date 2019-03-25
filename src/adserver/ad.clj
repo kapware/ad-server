@@ -1,4 +1,4 @@
-(ns adserver.ad-request
+(ns adserver.ad
   (:require [clojure.spec.alpha     :as s]
             [clojure.spec.gen.alpha :as gen]))
 
@@ -19,6 +19,16 @@
                     #(gen/fmap (fn [x] (str "IAB" x))
                                (gen/string))))
 (s/def ::interests (s/coll-of ::interest :kind vector?))
-(s/def ::ad-request (s/keys :req-un [::channel ::locale ::country ::device ::interests]
-                            :opt-un [::ad-ids]))
 
+
+;; Needs a better domain name, it could've been named `bannana` for now
+(s/def ::request (s/keys :req-un [::channel ::locale ::country ::device ::interests]
+                         :opt-un [::ad-ids]))
+
+(s/def ::ad-content-url string?)
+
+(s/def ::ad-creative (s/keys :req-un [::ad-id
+                                      ::ad-content-url]))
+
+;; Figure out a better name
+(s/def ::response (s/coll-of ::ad-creative :kind vector?))
