@@ -17,7 +17,7 @@
     (cheshire/parse-string (slurp body) true)))
 
 
-(t/deftest any-ad-for-channel-is-returned-aka-fallback-roundtrip
+(t/deftest naive-ad-management
   ;; given:
   (let [handler       adserver/handler
 
@@ -43,7 +43,7 @@
         get-response  (handler (mock/request :get (str "/api/v1" ad-location)))]
 
     ;; then
-    (t/testing "Ad server matches correct ads"
+    (t/testing "Ad server returns ad by id"
       (t/is (= 200 (:status get-response)))
       (t/is (= example-ad (parse-body (:body get-response)))))))
 
