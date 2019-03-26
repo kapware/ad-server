@@ -1,7 +1,7 @@
 (ns adserver.ad-handler
   (:require [compojure.api.sweet     :as api :refer [POST GET context defroutes]]
             [clojure.tools.logging   :as log]
-            [ring.util.http-response :as http-response :refer [created ok]]
+            [ring.util.http-response :as http-response :refer [created ok not-found]]
             [adserver.ad             :as ad]
             [spec-tools.core         :as st]
             [clojure.spec.alpha :as s]))
@@ -34,7 +34,9 @@
 
     (GET "/:id" [id]
       :return ::ad/ad
-      (ok (find-ad-by-id id)))))
+      (if-let [an-ad (find-ad-by-id id)]
+        (ok an-ad)
+        (not-found)))))
 
 
 (comment

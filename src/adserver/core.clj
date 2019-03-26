@@ -4,6 +4,7 @@
             [mount.core            :as mount :refer [defstate]]
             [org.httpkit.server    :as httpkit]
             [adserver.ad-handler   :as ad-handler]
+            [compojure.route       :as route]
             [compojure.api.sweet   :as api :refer [api context]]))
 
 
@@ -18,7 +19,8 @@
    (context "/api/v1" []
                 :tags ["api"]
                 :coercion :spec
-                ad-handler/routes)))
+                ad-handler/routes)
+   (route/not-found "Nothing here")))
 
 
 (defn start-webservice []
@@ -27,7 +29,7 @@
     (httpkit/run-server handler {:port port})))
 
 
-(defstate webservice
+(defstate webservice 
   :start (start-webservice)
   ;; (start-webservice) is expected to return a function to close webservice
   :stop (webservice))

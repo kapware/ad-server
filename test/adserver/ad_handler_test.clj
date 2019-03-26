@@ -12,6 +12,7 @@
   (gen/fmap (fn [a-map] (merge a-map shadow-values))
             gen))
 
+
 (defn parse-body [body]
   (if body
     (cheshire/parse-string (slurp body) true)))
@@ -24,6 +25,19 @@
         example-ad    (-> (gen/generate (shadow-generator (s/gen ::ad/ad)
                                                           {:channel "foo"}))
                           (dissoc :ad-id))
+        ;; when:
+        not-found     (handler (mock/request :get (str "/api/v1/ad/i-dont-exist")))
+        ;; then:
+        _             (t/testing "On empty set 404 should be reported"
+                        (t/is (= 404 (:status not-found))))
+
+        ;; when:
+        bad-request   (handler (-> (mock/request :post "/api/v1/ad" example-ad)
+                                   (mock/json-body {:not :an-ad})))
+        ;; then:
+        _             (t/testing "On invalid post 400 should be reported"
+                        (t/is (= 400 (:status bad-request))))
+
         ;; when:
         post-response (handler (-> (mock/request :post "/api/v1/ad" example-ad)
                                    (mock/json-body example-ad)))
