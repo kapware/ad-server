@@ -1,12 +1,13 @@
 (ns adserver.ad-handler-test
-  (:require [clojure.test             :as t]
-            [adserver.core            :as adserver]
-            [adserver.ad-handler      :as sut]
-            [adserver.ad              :as ad]
-            [ring.mock.request        :as mock]
-            [clojure.spec.gen.alpha   :as gen]
-            [clojure.spec.alpha       :as s]
-            [cheshire.core            :as cheshire]))
+  (:require [clojure.test                            :as t]
+            [adserver.core                           :as adserver]
+            [adserver.ad-handler                     :as sut]
+            [adserver.ad                             :as ad]
+            [ring.mock.request                       :as mock]
+            [clojure.spec.gen.alpha                  :as gen]
+            [clojure.spec.alpha                      :as s]
+            [cheshire.core                           :as cheshire]
+            [com.gfredericks.test.chuck.clojure-test :as test.chuck]))
 
 (defn shadow-generator [gen shadow-values]
   (gen/fmap (fn [a-map] (merge a-map shadow-values))
@@ -32,14 +33,14 @@
                         (t/is (= 404 (:status not-found))))
 
         ;; when:
-        bad-request   (handler (-> (mock/request :post "/api/v1/ad" example-ad)
+        bad-request   (handler (-> (mock/request :post "/api/v1/ad")
                                    (mock/json-body {:not :an-ad})))
         ;; then:
         _             (t/testing "On invalid post 400 should be reported"
                         (t/is (= 400 (:status bad-request))))
 
         ;; when:
-        post-response (handler (-> (mock/request :post "/api/v1/ad" example-ad)
+        post-response (handler (-> (mock/request :post "/api/v1/ad")
                                    (mock/json-body example-ad)))
         post-body     (-> post-response
                           :body
@@ -62,11 +63,48 @@
       (t/is (= example-ad (parse-body (:body get-response)))))))
 
 
+(t/deftest naive-ad-matching
+  ;; given
+  (let [handler   adserver/handler
+        post-ad   (fn [ad] (let [response (handler (-> (mock/request :post "/api/v1/ad")
+                                                       (mock/json-body ad)))]
+                             (do
+                               (t/testing "Sanity check when posting example")
+                               (t/is (= 201 (:status response))))))]
+    (test.chuck/checking
+     "Checking filter ads by channel"
+     10
+     [some-ads  (gen/vector (shadow-generator (s/gen ::ad/request) {:channel "bar"}) 6)
+      noise-ads (gen/vector (gen/such-that (fn [{:keys [channel]}] (not= "bar" channel))
+                                           (s/gen ::ad/request)) 10)]
+     (reset! sut/ad-map {}) ;; hack! reset ads each run
+     (doseq [ad (clojure.set/union some-ads noise-ads)]
+       (post-ad ad))
+
+     ;; when:
+     (let [response     (handler (-> (mock/request :get "/api/v1/ad?channel=bar")))
+           response-ads (parse-body (:body response))]
+
+       ;; then:
+       (t/is (= 200 (:status response)))
+       (t/is (= 6   (count response-ads)) "only bar channel ads")
+       (t/is (empty (remove (fn [{:keys [channel]}] (= "bar" channel)) response-ads)))))))
 
 
 
 (comment
   ;; Generator helper, that would generate specific ads
-  (gen/sample (shadow-generator (s/gen ::ad/request) {:channel "bar" :locale "pl"})) 
+  (gen/sample (shadow-generator (s/gen ::ad/request) {:channel "bar" :locale "pl"}))
+
+  (not-empty (filter (fn [{:keys [channel]}] (= "bar" channel)) [{:channel "foo"} {:channel "foo"}])) 
+
+  (->>
+   (gen/generate (gen/vector (shadow-generator (s/gen ::ad/request) {:channel "bar"}) 10)) 
+   (clojure.set/union
+    (gen/generate (gen/vector (gen/such-that (fn [{:keys [channel]}] (not= "bar" channel))
+                                                 (s/gen ::ad/request)))) ) 
+   (map :channel)
+   ) 
+
   )
 
