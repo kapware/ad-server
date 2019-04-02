@@ -24,18 +24,37 @@
     ad))
 
 
-(defn find-all-ads-by [{:keys [channel locale] :as params}]
-  (if (and (not channel) (not locale))
+(defn available? [{:keys [lov views]:as ad}]
+  (< (or views 0) (or lov 0)))
+
+
+(defn find-all-ads-by [{:keys [channel locale available limit] :as params}]
+  (if (and (not channel) (not locale) (not available) (not limit))
     (vals @ad-map) ;; just return it all, without even bothering to filter
     (into []
-          (filter (fn [{a-channel :channel
+          (comp
+           (filter (fn [{a-channel :channel
                         a-locale  :locale
                         :as ad}]
                     (and
-                     (if (nil? channel) true (= a-channel channel))
-                     (if (nil? locale)  true (= a-locale  locale)))))
+                     (if (false? available) true (available? ad))
+                     (if (nil? channel)     true (= a-channel channel))
+                     (if (nil? locale)      true (= a-locale  locale)))))
+           (if (nil? limit) identity (take limit)))
           (vals @ad-map))))
 
+
+(defn new-ad-view [{:keys [ad-id] :as ad-view}]
+  (let [ad-view-id (uuid)]
+    ;; Store views-events separately? For now just modify the common aggregate
+    (swap! ad-map update-in [ad-id :views] (fnil inc 0))
+    (str "/ad-view/" ad-view-id)))
+
+(defn parse-int [s]
+  (try
+    (Integer/parseInt s)
+    (catch Exception e
+        nil)))
 
 (defroutes routes
   (context "/ad" []
@@ -59,13 +78,27 @@
                        (created (new-ad ad)))}
         :get
         {:parameters {:query-params (s/keys :opt-un [::ad/channel
-                                                     ::ad/locale])}
+                                                     ::ad/locale
+                                                     ::ad/available
+                                                     ::ad/limit])}
          :responses  {200 {:schema (s/coll-of ::ad/ad)}}
-         :handler    (fn [{{:keys [channel locale]} :query-params}]
-                       (if-let [ads (find-all-ads-by {:channel channel
-                                                      :locale  locale})]
+         :handler    (fn [{{:keys [channel locale available limit]} :query-params}]
+                       (if-let [ads (find-all-ads-by {:channel   channel
+                                                      :locale    locale
+                                                      :available (= "1" available)
+                                                      :limit     (parse-int limit)})]
                          (ok ads)
-                         (not-found)))}}))))
+                         (not-found)))}})))
+  (context "/ad-view" []
+    :tags     ["ad-view"]
+    :coercion :spec
+
+    (context "/" []
+      (resource
+       {:post
+        {:parameters {:body-params ::ad/view}
+         :handler    (fn [{ad-view :body-params :as req}]
+                       (created (new-ad-view ad-view)))}}))))
 
 (comment
   (uuid)

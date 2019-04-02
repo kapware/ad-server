@@ -30,13 +30,13 @@
                                  (gen/string)))))
 (s/def ::interests (with-example
                      (s/coll-of ::interest :kind vector?)))
-
+(s/def ::lov       (with-example int?))
 
 ;; Needs a better domain name, it could've been named `bannana` for now
 (s/def ::request (s/keys :req-un [::channel ::locale ::country ::device ::interests]
                          :opt-un [::ad-ids]))
 
-(s/def ::ad      (s/keys :req-un [::channel ::locale ::country]
+(s/def ::ad      (s/keys :req-un [::channel ::locale ::country ::lov]
                          :opt-un [::ad-id]))
 
 (s/def ::ad-content-url (with-example string?))
@@ -47,3 +47,16 @@
 ;; Figure out a better name
 (s/def ::response (with-example
                     (s/coll-of ::ad-creative :kind vector?)))
+
+
+;; Ad viewed command
+(s/def ::view (with-example
+                (s/keys :req-un [::ad-id
+                                 ::channel])))
+
+;; Params
+(s/def ::available (with-example
+                     string?))
+
+(s/def ::limit     (with-example
+                     string?))

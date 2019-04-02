@@ -19,7 +19,7 @@
     (cheshire/parse-string (slurp body) true))) 
 
 
-(t/deftest naive-ad-management
+(t/deftest ad-management
   ;; given:
   (let [handler       adserver/handler
 
@@ -74,9 +74,9 @@
     (test.chuck/checking
      "Checking filter ads by channel"
      10
-     [some-ads  (gen/vector (shadow-generator (s/gen ::ad/request) {:channel "bar"}) 6)
+     [some-ads  (gen/vector (shadow-generator (s/gen ::ad/ad) {:channel "bar"}) 6)
       noise-ads (gen/vector (gen/such-that (fn [{:keys [channel]}] (not= "bar" channel))
-                                           (s/gen ::ad/request)) 10)]
+                                           (s/gen ::ad/ad)) 10)]
      (reset! sut/ad-map {}) ;; hack! reset ads each run
      (doseq [ad (clojure.set/union some-ads noise-ads)]
        (post-ad ad))
@@ -102,9 +102,9 @@
     (test.chuck/checking
      "Checking filter ads by locale"
      10
-     [some-ads  (gen/vector (shadow-generator (s/gen ::ad/request) {:locale "pl_PL"}) 3)
+     [some-ads  (gen/vector (shadow-generator (s/gen ::ad/ad) {:locale "pl_PL"}) 3)
       noise-ads (gen/vector (gen/such-that (fn [{:keys [locale]}] (not= "pl_PL" locale))
-                                           (s/gen ::ad/request)) 10)]
+                                           (s/gen ::ad/ad)) 10)]
      (reset! sut/ad-map {}) ;; hack! reset ads each run
      (doseq [ad (clojure.set/union some-ads noise-ads)]
        (post-ad ad))
@@ -117,6 +117,71 @@
        (t/is (= 200 (:status response)))
        (t/is (= 3   (count response-ads)) "only pl_PL locale ads")
        (t/is (empty (remove (fn [{:keys [locale]}] (= "pl_PL" locale)) response-ads)))))))
+
+
+(t/deftest ad-limit-of-views
+  ;; given
+  (let [handler   adserver/handler
+        post-ad   (fn [ad] (let [response (handler (-> (mock/request :post "/api/v1/ad")
+                                                       (mock/json-body ad)))]
+                             (do
+                               (t/testing "Sanity check when posting example")
+                               (t/is (= 201 (:status response)))
+                               (get-in response [:headers "Location"]))))]
+    (test.chuck/checking
+     "Checking filter ads by limit-of-viewes"
+     10
+     [some-ads  (gen/vector (shadow-generator (s/gen ::ad/ad) {:lov 1}) 4)
+      noise-ads (gen/vector (shadow-generator (s/gen ::ad/ad) {:lov 1000}) 20)]
+     (reset! sut/ad-map {}) ;; hack! reset ads each run
+
+     (let [ad-responses (doall (map post-ad (clojure.set/union some-ads noise-ads)))]
+
+       ;; when:
+       ;; view all ads, once
+       (doseq [ad-post-response-path ad-responses]
+         (let [ad-resp  (handler (-> (mock/request :get (str "/api/v1" ad-post-response-path))))
+               ad       (parse-body (:body ad-resp))
+               id       (nth (clojure.string/split ad-post-response-path #"/") 2) ;; /ad/id
+               channel  (:channel ad)
+               response (handler (-> (mock/request :post "/api/v1/ad-view")
+                                     (mock/json-body {:ad-id   id
+                                                      :channel channel})))]
+           (t/is (= 201 (:status response))))))
+
+     ;; and when:
+     (let [response     (handler (-> (mock/request :get "/api/v1/ad?available=1")))
+           response-ads (parse-body (:body response))]
+
+       ;; then:
+       (t/is (= 200 (:status response)))
+       (t/is (= 20  (count response-ads)) "only available ads")))))
+
+
+(t/deftest ad-just-one
+  ;; given
+  (let [handler   adserver/handler
+        post-ad   (fn [ad] (let [response (handler (-> (mock/request :post "/api/v1/ad")
+                                                       (mock/json-body ad)))]
+                             (do
+                               (t/testing "Sanity check when posting example")
+                               (t/is (= 201 (:status response)))
+                               (get-in response [:headers "Location"]))))]
+    (test.chuck/checking
+     "Checking filter ads by limit-of-viewes"
+     10
+     [some-ads  (gen/vector (s/gen ::ad/ad) 4)]
+     (reset! sut/ad-map {}) ;; hack! reset ads each run
+     (doseq [ad some-ads]
+       (post-ad ad))
+
+     ;; and when:
+     (let [response     (handler (-> (mock/request :get "/api/v1/ad?limit=1")))
+           response-ads (parse-body (:body response))]
+
+       ;; then:
+       (t/is (= 200 (:status response)))
+       (t/is (= 1   (count response-ads)) "only one, any")))))
 
 
 (comment
@@ -176,7 +241,8 @@
 
 (comment
   ;; Generator helper, that would generate specific ads
-  (gen/sample (shadow-generator (s/gen ::ad/request) {:channel "bar" :locale "pl"}))
+  (gen/sample (s/gen ::ad/ad)) 
+  (gen/sample (shadow-generator (s/gen ::ad/request) {:channel "bar" :locale "pl"})) 
 
   (not-empty (filter (fn [{:keys [channel]}] (= "bar" channel)) [{:channel "foo"} {:channel "foo"}])) 
 
