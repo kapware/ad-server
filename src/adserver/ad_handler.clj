@@ -1,10 +1,11 @@
 (ns adserver.ad-handler
-  (:require [compojure.api.sweet     :as api :refer [POST GET context defroutes]]
+  (:require [compojure.api.sweet     :as api :refer [context defroutes resource]]
             [clojure.tools.logging   :as log]
             [ring.util.http-response :as http-response :refer [created ok not-found]]
             [adserver.ad             :as ad]
             [spec-tools.core         :as st]
-            [clojure.spec.alpha      :as s]))
+            [clojure.spec.alpha      :as s]
+            [spec-tools.data-spec    :as ds]))
 
 (defn uuid [] (.toString (java.util.UUID/randomUUID)))
 
@@ -24,8 +25,11 @@
 
 
 (defn find-all-ads-by [{:keys [channel] :as params}]
-  (into []
-        (filter (fn [{a-channel :channel :as ad}] (= a-channel channel)) (vals @ad-map))))
+  (if-not channel
+    (vals @ad-map)
+    (into []
+          (filter (fn [{a-channel :channel :as ad}] (= a-channel channel))
+                  (vals @ad-map)))))
 
 
 (defroutes routes
@@ -33,26 +37,33 @@
     :tags     ["ad"]
     :coercion :spec
 
-    (POST "/" []
-      :body   [ad ::ad/ad]
-      (created (new-ad ad)))
+    (context "/:id" [id]
+      (resource
+      {:get
+       {:responses  {200 {:schema ::ad/ad}}
+        :handler (fn [{:as req}]
+                   (log/warn "GEEEET")
+                   (if-let [an-ad (find-ad-by-id id)]
+                     (ok an-ad)
+                     (not-found)))}}))
 
-    (GET "/:id" [id]
-      :return ::ad/ad
-      (if-let [an-ad (find-ad-by-id id)]
-        (ok an-ad)
-        (not-found)))
-
-    (GET "/" []
-      :query-params [channel :- ::ad/channel]
-      :return       (s/coll-of ::ad/ad)
-      (if-let [ads (find-all-ads-by {:channel channel})]
-        (ok ads)
-        (not-found)))))
-
+    (context "/" []
+      (resource
+       {:post
+        {:parameters {:body-params ::ad/ad}
+         :handler    (fn [{ad :body-params :as req}]
+                       (log/warn req)
+                       (created (new-ad ad)))}
+        :get
+        {:parameters {:query-params (s/keys :opt-un [::ad/channel])}
+         :responses  {200 {:schema (s/coll-of ::ad/ad)}}
+         :handler    (fn [{{:keys [channel]} :query-params}]
+                       (if-let [ads (find-all-ads-by {:channel channel})]
+                         (ok ads)
+                         (not-found)))}}))))
 
 (comment
   (uuid)
-  (count @ad-map) 
+  (count @ad-map)
   (reset! ad-map {}) 
   )

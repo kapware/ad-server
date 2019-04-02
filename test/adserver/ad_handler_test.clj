@@ -63,7 +63,7 @@
       (t/is (= example-ad (parse-body (:body get-response)))))))
 
 
-(t/deftest naive-ad-matching
+(t/deftest ad-matching-by-channel
   ;; given
   (let [handler   adserver/handler
         post-ad   (fn [ad] (let [response (handler (-> (mock/request :post "/api/v1/ad")
@@ -89,7 +89,6 @@
        (t/is (= 200 (:status response)))
        (t/is (= 6   (count response-ads)) "only bar channel ads")
        (t/is (empty (remove (fn [{:keys [channel]}] (= "bar" channel)) response-ads)))))))
-
 
 
 (comment
