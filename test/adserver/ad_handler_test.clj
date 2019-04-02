@@ -16,7 +16,7 @@
 
 (defn parse-body [body]
   (if body
-    (cheshire/parse-string (slurp body) true)))
+    (cheshire/parse-string (slurp body) true))) 
 
 
 (t/deftest naive-ad-management
@@ -91,6 +91,89 @@
        (t/is (empty (remove (fn [{:keys [channel]}] (= "bar" channel)) response-ads)))))))
 
 
+(t/deftest ad-matching-by-locale
+  ;; given
+  (let [handler   adserver/handler
+        post-ad   (fn [ad] (let [response (handler (-> (mock/request :post "/api/v1/ad")
+                                                       (mock/json-body ad)))]
+                             (do
+                               (t/testing "Sanity check when posting example")
+                               (t/is (= 201 (:status response))))))]
+    (test.chuck/checking
+     "Checking filter ads by locale"
+     10
+     [some-ads  (gen/vector (shadow-generator (s/gen ::ad/request) {:locale "pl_PL"}) 3)
+      noise-ads (gen/vector (gen/such-that (fn [{:keys [locale]}] (not= "pl_PL" locale))
+                                           (s/gen ::ad/request)) 10)]
+     (reset! sut/ad-map {}) ;; hack! reset ads each run
+     (doseq [ad (clojure.set/union some-ads noise-ads)]
+       (post-ad ad))
+
+     ;; when:
+     (let [response     (handler (-> (mock/request :get "/api/v1/ad?locale=pl_PL")))
+           response-ads (parse-body (:body response))]
+
+       ;; then:
+       (t/is (= 200 (:status response)))
+       (t/is (= 3   (count response-ads)) "only pl_PL locale ads")
+       (t/is (empty (remove (fn [{:keys [locale]}] (= "pl_PL" locale)) response-ads)))))))
+
+
+(comment
+  ;; Failed test case:
+  (let [handler   adserver/handler
+        post-ad   (fn [ad] (let [response (handler (-> (mock/request :post "/api/v1/ad")
+                                                       (mock/json-body ad)))]
+                             (do
+                               (t/testing "Sanity check when posting example")
+                               (t/is (= 201 (:status response))))))]
+    (let [some-ads [{:channel "", :locale "pl_PL", :country "", :device "", :interests []}
+                    {:channel "", :locale "pl_PL", :country "", :device "", :interests []}
+                    {:channel "", :locale "pl_PL", :country "", :device "", :interests []}]
+        noise-ads [{:channel "", :locale "", :country "", :device "", :interests []} {:channel "", :locale "", :country "", :device "", :interests []} {:channel "", :locale "", :country "", :device "", :interests []} {:channel "", :locale "", :country "", :device "", :interests []} {:channel "", :locale "", :country "", :device "", :interests []} {:channel "", :locale "", :country "", :device "", :interests []} {:channel "", :locale "", :country "", :device "", :interests []} {:channel "", :locale "", :country "", :device "", :interests []} {:channel "", :locale "", :country "", :device "", :interests []} {:channel "", :locale "", :country "", :device "", :interests []}]]
+
+    (reset! sut/ad-map {}) ;; hack! reset ads each run
+    #_(doseq [ad (clojure.set/union some-ads noise-ads)]
+      (post-ad ad))
+    #_(post-ad {:channel "", :locale "pl_PL", :country "", :device "", :interests []}) 
+
+    (let [ad       {:channel "", :locale "pl_PL", :country "", :device "", :interests []}
+          response (handler (-> (mock/request :post "/api/v1/ad")
+                                (mock/json-body ad)))]
+      (parse-body (:body response))) 
+
+
+    ;; when:
+    #_(let [response     (handler (-> (mock/request :get "/api/v1/ad")))
+          response-ads (parse-body (:body response))]
+
+      ;; then:
+      @sut/ad-map 
+      #_response
+      #_(t/is (= 200 (:status response)))
+      #_(t/is (= 3   (count response-ads)) "only pl_PL locale ads")
+      #_(t/is (empty (remove (fn [{:keys [channel]}] (= "pl_PL" channel)) response-ads))))
+
+    ))
+
+
+  ;; Reduced to:
+  (let [ads [{:locale "", :channel "", :country ""} {:locale "", :channel "", :country ""} {:locale "", :channel "", :country ""} {:locale "pl_PL", :channel "", :country ""} {:locale "pl_PL", :channel "", :country ""} {:locale "", :channel "", :country ""} {:locale "", :channel "", :country ""} {:locale "", :channel "", :country ""} {:locale "", :channel "", :country ""} {:locale "", :channel "", :country ""} {:locale "", :channel "", :country ""} {:locale "", :channel "", :country ""} {:locale "pl_PL", :channel "", :country ""}]
+        channel ""
+        locale  "pl_PL"]
+
+
+    (into []
+          (filter (fn [{a-channel :channel
+                        a-locale  :locale
+                        :as ad}]
+                    (and
+                     (if (nil? channel) true (= a-channel channel))
+                     (if (nil? locale)  true (= a-locale  locale)))))
+          ads)) 
+  ) 
+
+
 (comment
   ;; Generator helper, that would generate specific ads
   (gen/sample (shadow-generator (s/gen ::ad/request) {:channel "bar" :locale "pl"}))
@@ -104,6 +187,9 @@
                                                  (s/gen ::ad/request)))) ) 
    (map :channel)
    ) 
+
+
+
 
   )
 

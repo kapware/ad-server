@@ -24,12 +24,17 @@
     ad))
 
 
-(defn find-all-ads-by [{:keys [channel] :as params}]
-  (if-not channel
-    (vals @ad-map)
+(defn find-all-ads-by [{:keys [channel locale] :as params}]
+  (if (and (not channel) (not locale))
+    (vals @ad-map) ;; just return it all, without even bothering to filter
     (into []
-          (filter (fn [{a-channel :channel :as ad}] (= a-channel channel))
-                  (vals @ad-map)))))
+          (filter (fn [{a-channel :channel
+                        a-locale  :locale
+                        :as ad}]
+                    (and
+                     (if (nil? channel) true (= a-channel channel))
+                     (if (nil? locale)  true (= a-locale  locale)))))
+          (vals @ad-map))))
 
 
 (defroutes routes
@@ -40,25 +45,25 @@
     (context "/:id" [id]
       (resource
       {:get
-       {:responses  {200 {:schema ::ad/ad}}
-        :handler (fn [{:as req}]
-                   (log/warn "GEEEET")
-                   (if-let [an-ad (find-ad-by-id id)]
-                     (ok an-ad)
-                     (not-found)))}}))
+       {:responses {200 {:schema ::ad/ad}}
+        :handler   (fn [{:as req}]
+                     (if-let [an-ad (find-ad-by-id id)]
+                       (ok an-ad)
+                       (not-found)))}}))
 
     (context "/" []
       (resource
        {:post
         {:parameters {:body-params ::ad/ad}
          :handler    (fn [{ad :body-params :as req}]
-                       (log/warn req)
                        (created (new-ad ad)))}
         :get
-        {:parameters {:query-params (s/keys :opt-un [::ad/channel])}
+        {:parameters {:query-params (s/keys :opt-un [::ad/channel
+                                                     ::ad/locale])}
          :responses  {200 {:schema (s/coll-of ::ad/ad)}}
-         :handler    (fn [{{:keys [channel]} :query-params}]
-                       (if-let [ads (find-all-ads-by {:channel channel})]
+         :handler    (fn [{{:keys [channel locale]} :query-params}]
+                       (if-let [ads (find-all-ads-by {:channel channel
+                                                      :locale  locale})]
                          (ok ads)
                          (not-found)))}}))))
 
